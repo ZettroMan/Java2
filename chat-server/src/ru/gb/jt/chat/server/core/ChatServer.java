@@ -7,10 +7,12 @@ import ru.gb.jt.network.SocketThreadListener;
 
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.Vector;
 
 public class ChatServer implements ServerSocketThreadListener, SocketThreadListener {
 
     ServerSocketThread server;
+    Vector<SocketThread> clientsThreads = new Vector<>();
 
     public void start(int port) {
         if (server == null || !server.isAlive()) {
@@ -36,7 +38,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     /**
      * Server Socket Thread methods
-     * */
+     */
 
     @Override
     public void onServerStart(ServerSocketThread thread) {
@@ -54,7 +56,8 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     }
 
     @Override
-    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) { }
+    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) {
+    }
 
     @Override
     public void onSocketAccepted(ServerSocketThread thread, ServerSocket server, Socket socket) {
@@ -70,16 +73,20 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     /**
      * Socket Thread methods
-     * */
+     */
 
     @Override
     public void onSocketStart(SocketThread thread, Socket socket) {
         putLog("Client connected");
+        clientsThreads.add(thread);
     }
 
     @Override
     public void onSocketStop(SocketThread thread) {
         putLog("Client disconnected");
+        //сюда!!!!!
+        clientsThreads.remove(thread);
+        //м.б. нужно сделать equals() для SocketThread'a
     }
 
     @Override
@@ -89,7 +96,11 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     @Override
     public void onReceiveString(SocketThread thread, Socket socket, String msg) {
-        thread.sendMessage("Echo: " + msg);
+        for (SocketThread t : clientsThreads) {
+            if (t.isAlive()) {
+                t.sendMessage("Echo: " + msg);
+            }
+        }
     }
 
     @Override
