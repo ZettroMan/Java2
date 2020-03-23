@@ -5,14 +5,13 @@ import ru.gb.jt.network.ServerSocketThreadListener;
 import ru.gb.jt.network.SocketThread;
 import ru.gb.jt.network.SocketThreadListener;
 
-import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.Vector;
 
 public class ChatServer implements ServerSocketThreadListener, SocketThreadListener {
 
     ServerSocketThread server;
-    Vector<SocketThread> clientsThreads = new Vector<>();
+    Vector<SocketThread> clientThreads = new Vector<>();
 
     public void start(int port) {
         if (server == null || !server.isAlive()) {
@@ -41,29 +40,15 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
      */
 
     @Override
-    public void onServerStart(ServerSocketThread thread) {
-        putLog("Server started");
+    public void onServerTimeout() {
     }
 
     @Override
-    public void onServerStop(ServerSocketThread thread) {
-        putLog("Server stopped");
-    }
-
-    @Override
-    public void onServerSocketCreated(ServerSocketThread thread, ServerSocket server) {
-        putLog("Server socket created");
-    }
-
-    @Override
-    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) {
-    }
-
-    @Override
-    public void onSocketAccepted(ServerSocketThread thread, ServerSocket server, Socket socket) {
+    public void onSocketAccepted(Socket socket) {
         putLog("Client connected");
         String name = "Socket Thread " + socket.getInetAddress() + ":" + socket.getPort();
-        new SocketThread(this, name, socket);
+        System.out.println("Socket accepted: " + socket.getInetAddress() + ":" + socket.getPort());
+        clientThreads.add(new SocketThread(this, name, socket));
     }
 
     @Override
@@ -76,35 +61,18 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
      */
 
     @Override
-    public void onSocketStart(SocketThread thread, Socket socket) {
-        putLog("Client connected");
-        clientsThreads.add(thread);
-    }
-
-    @Override
-    public void onSocketStop(SocketThread thread) {
-        putLog("Client disconnected");
-        //сюда!!!!!
-        clientsThreads.remove(thread);
-        //м.б. нужно сделать equals() для SocketThread'a
-    }
-
-    @Override
-    public void onSocketReady(SocketThread thread, Socket socket) {
-        putLog("Client is ready to chat");
-    }
-
-    @Override
-    public void onReceiveString(SocketThread thread, Socket socket, String msg) {
-        for (SocketThread t : clientsThreads) {
+    public void onReceiveString(String msg) {
+        for (SocketThread t : clientThreads) {
             if (t.isAlive()) {
-                t.sendMessage("Echo: " + msg);
+                t.sendMessage(msg);
             }
         }
     }
 
     @Override
     public void onSocketException(SocketThread thread, Exception exception) {
-        exception.printStackTrace();
+        clientThreads.remove(thread);
+        System.out.println("Client disconnected.");
+        //exception.printStackTrace();
     }
 }

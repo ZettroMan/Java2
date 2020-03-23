@@ -21,19 +21,16 @@ public class SocketThread extends Thread {
     @Override
     public void run() {
         try {
-            listener.onSocketStart(this, socket);
             DataInputStream in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
-            listener.onSocketReady(this, socket);
             while (!isInterrupted()) {
                 String msg = in.readUTF();
-                listener.onReceiveString(this, socket, msg);
+                listener.onReceiveString(msg);
             }
         } catch (IOException e) {
-            listener.onSocketException(this, e);
-        } finally {
-            close();
-            listener.onSocketStop(this);
+            if(!isInterrupted()) {
+                listener.onSocketException(this, e);
+            }
         }
     }
 
@@ -44,17 +41,12 @@ public class SocketThread extends Thread {
             return true;
         } catch (IOException e) {
             listener.onSocketException(this, e);
-            close();
             return false;
         }
     }
 
-    public synchronized void close() {
-        interrupt();
-        try {
-            socket.close();
-        } catch (IOException e) {
-            listener.onSocketException(this, e);
-        }
+    public Socket getSocket() {
+        return socket;
     }
+
 }

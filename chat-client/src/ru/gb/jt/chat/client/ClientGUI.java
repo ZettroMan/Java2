@@ -65,9 +65,6 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         btnLogin.addActionListener(this);
         btnDisconnect.addActionListener(this);
 
-        //устанавливаем вертикальное расположение элементов управления в главном окне
-        // setLayout(new BoxLayout(getContentPane(), BoxLayout.Y_AXIS));
-
         panelSettings.add(tfIPAddress);
         panelSettings.add(tfPort);
         panelSettings.add(cbAlwaysOnTop);
@@ -124,6 +121,11 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
 
     private void disconnect() {
         socketThread.interrupt();
+        try {
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         connectionStatus.setVisible(false);
         panelBottom.setVisible(false);
         panelSettings.setVisible(true);
@@ -185,22 +187,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
      */
 
     @Override
-    public void onSocketStart(SocketThread thread, Socket socket) {
-        putLog("Start");
-    }
-
-    @Override
-    public void onSocketStop(SocketThread thread) {
-        putLog("Stop");
-    }
-
-    @Override
-    public void onSocketReady(SocketThread thread, Socket socket) {
-        putLog("Ready");
-    }
-
-    @Override
-    public void onReceiveString(SocketThread thread, Socket socket, String msg) {
+    public void onReceiveString(String msg) {
         putLog(msg);
     }
 
