@@ -11,6 +11,10 @@ import java.awt.event.ActionListener;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.Socket;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class ClientGUI extends JFrame implements ActionListener, Thread.UncaughtExceptionHandler, SocketThreadListener {
 
@@ -185,11 +189,11 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
     @Override
     public void onReceiveString(SocketThread thread, Socket socket, String msg) {
         //разбираем значение полученной строки
-        String[] arr = msg.split(Library.DELIMITER);
-        if (arr.length > 2 || arr.length < 1) {
-            putLog("Wrong response");
+        if ("".equals(msg)) {
+            putLog("Empty response");
             return;
         }
+        String[] arr = msg.split(Library.DELIMITER);
         if (arr[0].equals(Library.AUTH_DENIED)) {
             putLog("Authentication error");
             return;
@@ -199,7 +203,12 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
             return;
         }
         if (arr[0].equals(Library.TYPE_BROADCAST)) {
-            putLog(arr[1]);
+            long millis = Long.parseLong(arr[1]);
+            Instant instant = Instant.ofEpochMilli(millis);
+            ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, ZoneOffset.systemDefault());
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+            String currentTime = formatter.format(zdt);
+            putLog(currentTime + "> " + arr[2] + " sends broadcast message: " + arr[3]);
             return;
         }
         if (arr[0].equals(Library.AUTH_ACCEPT)) {

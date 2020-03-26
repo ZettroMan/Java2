@@ -35,7 +35,7 @@ public class Library {
 
     public static String getTypeBroadcast(String src, String message) {
         return TYPE_BROADCAST + DELIMITER + System.currentTimeMillis() +
-                " : " + src + " : " + message;
+                DELIMITER + src + DELIMITER + message;
     }
 
 }
