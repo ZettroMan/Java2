@@ -42,7 +42,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     /**
      * Server Socket Thread methods
-     * */
+     */
 
     @Override
     public void onServerStart(ServerSocketThread thread) {
@@ -62,7 +62,8 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     }
 
     @Override
-    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) { }
+    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) {
+    }
 
     @Override
     public void onSocketAccepted(ServerSocketThread thread, ServerSocket server, Socket socket) {
@@ -78,7 +79,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     /**
      * Socket Thread methods
-     * */
+     */
 
     @Override
     public void onSocketStart(SocketThread thread, Socket socket) {
@@ -123,7 +124,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
         String password = arr[2];
         String nickname = SqlClient.getNickname(login, password);
         if (nickname == null) {
-            putLog("Invalid credentials for user" + login);
+            putLog("Invalid credentials for user " + login);
             client.authFail();
             return;
         }
@@ -137,8 +138,8 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     }
 
     private void sendToAllAuthorizedClients(String msg) {
-        for (int i = 0; i < clients.size(); i++) {
-            ClientThread client = (ClientThread) clients.get(i);
+        for (SocketThread socketThread : clients) {
+            ClientThread client = (ClientThread) socketThread;
             if (!client.isAuthorized()) continue;
             client.sendMessage(msg);
         }

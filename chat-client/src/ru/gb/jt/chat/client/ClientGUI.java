@@ -60,6 +60,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         btnSend.addActionListener(this);
         tfMessage.addActionListener(this);
         btnLogin.addActionListener(this);
+        btnDisconnect.addActionListener(this);
 
         panelTop.add(tfIPAddress);
         panelTop.add(tfPort);
@@ -91,8 +92,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
             connect();
         } else if (src == btnDisconnect) {
             socketThread.close();
-        }
-        else
+        } else
             throw new RuntimeException("Unknown source: " + src);
     }
 
@@ -111,12 +111,6 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         tfMessage.setText(null);
         tfMessage.grabFocus();
         socketThread.sendMessage(msg);
-
-        if (!"".equals(msg)) {
-            tfMessage.setText(null);
-            tfMessage.grabFocus();
-            socketThread.sendMessage(msg);
-        }
 
 //        putLog(String.format("%s: %s", username, msg));
 //        wrtMsgToLogFile(msg, username);
@@ -152,6 +146,9 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
                     e.getClass().getCanonicalName() + ": " +
                     e.getMessage() + "\n\t at " + ste[0];
         }
+        //почему-то в первый раз нормально отрабатывает, показывает диалоговое окно с сообщением
+        //и ждет, когда пользователь нажмет "Ок". Все последующие разы окно с сообщением просто
+        //промелькивает на экране. Подскажите, в чем дело? Может что-то в недрах реализации JOptionPane?
         JOptionPane.showMessageDialog(null, msg, "Exception", JOptionPane.ERROR_MESSAGE);
     }
 
@@ -164,7 +161,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
 
     /**
      * Socket thread methods
-     * */
+     */
 
     @Override
     public void onSocketStart(SocketThread thread, Socket socket) {
@@ -180,17 +177,42 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
 
     @Override
     public void onSocketReady(SocketThread thread, Socket socket) {
-        putLog("Ready");
-        panelBottom.setVisible(true);
-        panelTop.setVisible(false);
         String login = tfLogin.getText();
         String password = new String(tfPassword.getPassword());
         thread.sendMessage(Library.getAuthRequest(login, password));
-
     }
 
     @Override
     public void onReceiveString(SocketThread thread, Socket socket, String msg) {
+        //разбираем значение полученной строки
+        String[] arr = msg.split(Library.DELIMITER);
+        if (arr.length > 2 || arr.length < 1) {
+            putLog("Wrong response");
+            return;
+        }
+        if (arr[0].equals(Library.AUTH_DENIED)) {
+            putLog("Authentication error");
+            return;
+        }
+        if (arr[0].equals(Library.MSG_FORMAT_ERROR)) {
+            putLog("Server doesn't understand request string: " + arr[1]);
+            return;
+        }
+        if (arr[0].equals(Library.TYPE_BROADCAST)) {
+            putLog(arr[1]);
+            return;
+        }
+        if (arr[0].equals(Library.AUTH_ACCEPT)) {
+            putLog("Ready to chat");
+            panelBottom.setVisible(true);
+            panelTop.setVisible(false);
+            return;
+        }
+        //по идее, данной строки быть не должно, получение сообщения тоже должно соответствовать
+        //отдельному разделу протокола (по аналогии с TYPE_BROADCAST) и обрабатываться в блоках if
+        //выше. Если обработка полученной строки дошла до этого места, значит она не соответствует
+        //протоколу обмена и должна быть либо отброшена, либо выведена в сообщение об ошибке
+        //(с исключением или без)
         putLog(msg);
     }
 
