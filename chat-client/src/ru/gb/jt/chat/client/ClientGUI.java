@@ -8,6 +8,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.Socket;
@@ -15,21 +17,24 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 
-public class ClientGUI extends JFrame implements ActionListener, Thread.UncaughtExceptionHandler, SocketThreadListener {
+public class ClientGUI extends JFrame implements ActionListener,  Thread.UncaughtExceptionHandler,
+        SocketThreadListener, MouseListener {
 
-    private static final int WIDTH = 400;
-    private static final int HEIGHT = 300;
+    private static final int WIDTH = 600;
+    private static final int HEIGHT = 400;
 
     private final JTextArea log = new JTextArea();
     private final JPanel panelTop = new JPanel(new GridLayout(2, 3));
-    private final JTextField tfIPAddress = new JTextField("95.84.209.91");
+    private final JTextField tfIPAddress = new JTextField("127.0.0.1");
     private final JTextField tfPort = new JTextField("8189");
     private final JCheckBox cbAlwaysOnTop = new JCheckBox("Always on top");
-    private final JTextField tfLogin = new JTextField("ivan1");
+    private final JCheckBox cbBroadcast = new JCheckBox("Broadcast");
+    private final JTextField tfLogin = new JTextField("zettro");
     private final JPasswordField tfPassword = new JPasswordField("123");
     private final JButton btnLogin = new JButton("Login");
 
     private final JPanel panelBottom = new JPanel(new BorderLayout());
+    private final JPanel panelUsers = new JPanel(new BorderLayout());
     private final JButton btnDisconnect = new JButton("<html><b>Disconnect</b></html>");
     private final JTextField tfMessage = new JTextField();
     private final JButton btnSend = new JButton("Send");
@@ -57,18 +62,19 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         setLocationRelativeTo(null);
         setSize(WIDTH, HEIGHT);
         setTitle("Chat client");
-        String[] users = {"user1", "user2", "user3", "user4", "user5",
-                "user_with_an_exceptionally_long_name_in_this_chat"};
+        String[] users = {"user1", "user2", "user3", "user4", "user5"};
         userList.setListData(users);
         log.setEditable(false);
         JScrollPane scrollLog = new JScrollPane(log);
         JScrollPane scrollUsers = new JScrollPane(userList);
-        scrollUsers.setPreferredSize(new Dimension(100, 0));
+        scrollUsers.setPreferredSize(new Dimension(150, 0));
         cbAlwaysOnTop.addActionListener(this);
+        cbBroadcast.addActionListener(this);
         btnSend.addActionListener(this);
         tfMessage.addActionListener(this);
         btnLogin.addActionListener(this);
         btnDisconnect.addActionListener(this);
+        userList.addMouseListener(this);
 
         panelTop.add(tfIPAddress);
         panelTop.add(tfPort);
@@ -82,11 +88,15 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         panelBottom.setVisible(false);
 
         add(scrollLog, BorderLayout.CENTER);
-        add(scrollUsers, BorderLayout.EAST);
+        panelUsers.add(scrollUsers, BorderLayout.CENTER);
+        panelUsers.add(cbBroadcast, BorderLayout.SOUTH);
+        add(panelUsers, BorderLayout.EAST);
         add(panelTop, BorderLayout.NORTH);
         add(panelBottom, BorderLayout.SOUTH);
 
         setVisible(true);
+        cbAlwaysOnTop.doClick();
+        cbBroadcast.doClick();
     }
 
     @Override
@@ -94,14 +104,18 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         Object src = e.getSource();
         if (src == cbAlwaysOnTop) {
             setAlwaysOnTop(cbAlwaysOnTop.isSelected());
+        } else if (src == cbBroadcast) {
+            if (!cbBroadcast.isSelected()) {
+                cbBroadcast.setSelected(true);
+            }
+            userList.clearSelection();
         } else if (src == btnSend || src == tfMessage) {
             sendMessage();
         } else if (src == btnLogin) {
             connect();
         } else if (src == btnDisconnect) {
             socketThread.close();
-        }
-        else
+        } else
             throw new RuntimeException("Unknown source: " + src);
     }
 
@@ -119,7 +133,11 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         if ("".equals(msg)) return;
         tfMessage.setText(null);
         tfMessage.grabFocus();
-        socketThread.sendMessage(Library.getTypeBcastClient(msg));
+        if(cbBroadcast.isSelected()) {
+            socketThread.sendMessage(Library.getTypeBcastClient(msg));
+        } else {
+            socketThread.sendMessage(Library.getTypeMcastClient(msg, userList.getSelectedValuesList()));
+        }
     }
 
     private void wrtMsgToLogFile(String msg, String username) {
@@ -164,7 +182,7 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
 
     /**
      * Socket thread methods
-     * */
+     */
 
     @Override
     public void onSocketStart(SocketThread thread, Socket socket) {
@@ -227,5 +245,34 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
     @Override
     public void onSocketException(SocketThread thread, Exception exception) {
         //showException(thread, exception);
+    }
+
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        Object src = e.getSource();
+        if (src == userList) {
+            System.out.println("User selected");
+            cbBroadcast.setSelected(false);
+        }
+    }
+
+    @Override
+    public void mousePressed(MouseEvent e) {
+
+    }
+
+    @Override
+    public void mouseReleased(MouseEvent e) {
+
+    }
+
+    @Override
+    public void mouseEntered(MouseEvent e) {
+
+    }
+
+    @Override
+    public void mouseExited(MouseEvent e) {
+
     }
 }

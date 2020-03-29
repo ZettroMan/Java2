@@ -53,8 +53,8 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     @Override
     public void onServerStop(ServerSocketThread thread) {
         putLog("Server stopped");
-        for (int i = 0; i < clients.size(); i++) {
-            clients.get(i).close();
+        for (SocketThread client : clients) {
+            client.close();
         }
         SqlClient.disconnect();
     }
@@ -155,23 +155,51 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
                 sendToAllAuthorizedClients(
                         Library.getTypeBroadcast(client.getNickname(), arr[1]));
                 break;
+            case Library.TYPE_MCAST_CLIENT:
+                sendToCustomClients(Library.getTypeBroadcast(client.getNickname(), arr[1]), arr);
+                break;
             default:
                 client.sendMessage(Library.getMsgFormatError(msg));
         }
     }
 
     private synchronized void sendToAllAuthorizedClients(String msg) {
-        for (int i = 0; i < clients.size(); i++) {
-            ClientThread client = (ClientThread) clients.get(i);
-            if (!client.isAuthorized()) continue;
-            client.sendMessage(msg);
+        for (SocketThread clnt: clients) {
+            if (((ClientThread)clnt).isAuthorized()) {
+                clnt.sendMessage(msg);
+            }
+        }
+//        for (int i = 0; i < clients.size(); i++) {
+//            ClientThread client = (ClientThread) clients.get(i);
+//            if (!client.isAuthorized()) continue;
+//            client.sendMessage(msg);
+//        }
+    }
+
+    private synchronized void sendToCustomClients(String msg, String[] nicknames) {
+        if(nicknames.length < 3) throw new RuntimeException("Multicast error!");
+        for (int i = 2; i < nicknames.length; i++) {
+            sendToSingleClient(msg, nicknames[i]);
         }
     }
 
+    private synchronized void sendToSingleClient(String msg, String nickname) {
+        for (SocketThread clnt: clients) {
+            if (((ClientThread)clnt).getNickname().equals(nickname)) {
+                clnt.sendMessage(msg);
+            }
+        }
+//        for (int i = 0; i < clients.size(); i++) {
+//            ClientThread client = (ClientThread) clients.get(i);
+//            if (client.getNickname().equals(nickname)) continue;
+//            client.sendMessage(msg);
+    }
+
+
     private synchronized String getUsers() {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < clients.size(); i++) {
-            ClientThread client = (ClientThread) clients.get(i);
+        for (SocketThread socketThread : clients) {
+            ClientThread client = (ClientThread) socketThread;
             if (!client.isAuthorized()) continue;
             sb.append(client.getNickname()).append(Library.DELIMITER);
         }
@@ -179,8 +207,8 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     }
 
     private synchronized ClientThread findClientByNickname(String nickname) {
-        for (int i = 0; i < clients.size(); i++) {
-            ClientThread client = (ClientThread) clients.get(i);
+        for (SocketThread socketThread : clients) {
+            ClientThread client = (ClientThread) socketThread;
             if (!client.isAuthorized()) continue;
             if (client.getNickname().equals(nickname))
                 return client;

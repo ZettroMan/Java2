@@ -1,5 +1,7 @@
 package ru.gb.jt.chat.library;
 
+import java.util.List;
+
 public class Library {
     /*
 /auth_request±login±password
@@ -17,11 +19,22 @@ public class Library {
     // если мы вдруг не поняли, что за сообщение и не смогли разобрать
     public static final String TYPE_BROADCAST = "/bcast";
     // то есть сообщение, которое будет посылаться всем
-    public static final String TYPE_BCAST_CLIENT = "/client_msg";
+    public static final String TYPE_BCAST_CLIENT = "/client_bcast";
+    //TYPE_MCAST_CLIENT - мультикаст - только определенным пользователям
+    public static final String TYPE_MCAST_CLIENT = "/client_mcast";
     public static final String USER_LIST = "/user_list";
 
     public static String getTypeBcastClient(String msg) {
         return TYPE_BCAST_CLIENT + DELIMITER + msg;
+    }
+
+    public static String getTypeMcastClient(String msg, List<String> users) {
+        StringBuilder result = new StringBuilder(TYPE_MCAST_CLIENT + DELIMITER + msg);
+        for(String usr: users) {
+            result.append(DELIMITER);
+            result.append(usr);
+        }
+        return result.toString();
     }
 
     public static String getUserList(String users) {
