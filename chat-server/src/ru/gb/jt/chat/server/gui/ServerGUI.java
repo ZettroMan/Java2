@@ -14,7 +14,7 @@ public class ServerGUI extends JFrame implements ActionListener, Thread.Uncaught
     private static final int WIDTH = 600;
     private static final int HEIGHT = 300;
 
-    private final ChatServer chatServer = new ChatServer(this::onChatServerMessage);
+    private final ChatServer chatServer = new ChatServer(this);
     private final JButton btnStart = new JButton("Start");
     private final JButton btnStop = new JButton("Stop");
     private final JPanel panelTop = new JPanel(new GridLayout(1, 2));

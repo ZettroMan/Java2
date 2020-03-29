@@ -40,7 +40,7 @@ public class SocketThread extends Thread {
     public synchronized boolean sendMessage(String msg) {
         try {
             out.writeUTF(msg);
-            //out.flush();
+            out.flush();
             return true;
         } catch (IOException e) {
             listener.onSocketException(this, e);
