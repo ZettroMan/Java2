@@ -21,32 +21,40 @@ public class SocketThread extends Thread {
     @Override
     public void run() {
         try {
+            listener.onSocketStart(this, socket);
             DataInputStream in = new DataInputStream(socket.getInputStream());
             out = new DataOutputStream(socket.getOutputStream());
+            listener.onSocketReady(this, socket);
             while (!isInterrupted()) {
                 String msg = in.readUTF();
-                listener.onReceiveString(msg);
+                listener.onReceiveString(this, socket, msg);
             }
         } catch (IOException e) {
-            if(!isInterrupted()) {
-                listener.onSocketException(this, e);
-            }
+            listener.onSocketException(this, e);
+        } finally {
+            close();
+            listener.onSocketStop(this);
         }
     }
 
     public synchronized boolean sendMessage(String msg) {
         try {
             out.writeUTF(msg);
-            out.flush();
+            //out.flush();
             return true;
         } catch (IOException e) {
             listener.onSocketException(this, e);
+            close();
             return false;
         }
     }
 
-    public Socket getSocket() {
-        return socket;
+    public synchronized void close() {
+        interrupt();
+        try {
+            socket.close();
+        } catch (IOException e) {
+            listener.onSocketException(this, e);
+        }
     }
-
 }

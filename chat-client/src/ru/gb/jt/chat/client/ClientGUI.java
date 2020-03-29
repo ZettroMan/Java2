@@ -1,5 +1,6 @@
 package ru.gb.jt.chat.client;
 
+import ru.gb.jt.chat.library.Library;
 import ru.gb.jt.network.SocketThread;
 import ru.gb.jt.network.SocketThreadListener;
 
@@ -10,16 +11,18 @@ import java.awt.event.ActionListener;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.net.Socket;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class ClientGUI extends JFrame implements ActionListener, Thread.UncaughtExceptionHandler, SocketThreadListener {
 
     private static final int WIDTH = 400;
     private static final int HEIGHT = 300;
 
-    private final JPanel panelTop = new JPanel(new BorderLayout());
-    private final JPanel panelSettings = new JPanel(new GridLayout(2, 3));
-    //private final JPanel panelCenter = new JPanel(new BorderLayout());
-    private final JPanel panelBottom = new JPanel(new BorderLayout());
+    private final JTextArea log = new JTextArea();
+    private final JPanel panelTop = new JPanel(new GridLayout(2, 3));
     private final JTextField tfIPAddress = new JTextField("127.0.0.1");
     private final JTextField tfPort = new JTextField("8189");
     private final JCheckBox cbAlwaysOnTop = new JCheckBox("Always on top");
@@ -27,15 +30,13 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
     private final JPasswordField tfPassword = new JPasswordField("123");
     private final JButton btnLogin = new JButton("Login");
 
+    private final JPanel panelBottom = new JPanel(new BorderLayout());
     private final JButton btnDisconnect = new JButton("<html><b>Disconnect</b></html>");
     private final JTextField tfMessage = new JTextField();
     private final JButton btnSend = new JButton("Send");
-    private final JLabel connectionStatus = new JLabel("Connection status");
 
-    private final JTextArea log = new JTextArea();
     private final JList<String> userList = new JList<>();
     private SocketThread socketThread;
-    private Socket socket;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(new Runnable() {
@@ -65,27 +66,20 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         btnLogin.addActionListener(this);
         btnDisconnect.addActionListener(this);
 
-        panelSettings.add(tfIPAddress);
-        panelSettings.add(tfPort);
-        panelSettings.add(cbAlwaysOnTop);
-        panelSettings.add(tfLogin);
-        panelSettings.add(tfPassword);
-        panelSettings.add(btnLogin);
-        connectionStatus.setHorizontalAlignment(SwingConstants.CENTER);
-        connectionStatus.setPreferredSize(new Dimension(WIDTH, 20));
-        panelTop.add(connectionStatus, BorderLayout.NORTH);
-        panelTop.add(panelSettings, BorderLayout.CENTER);
-        connectionStatus.setVisible(false);
-        panelTop.setVisible(true);
-
+        panelTop.add(tfIPAddress);
+        panelTop.add(tfPort);
+        panelTop.add(cbAlwaysOnTop);
+        panelTop.add(tfLogin);
+        panelTop.add(tfPassword);
+        panelTop.add(btnLogin);
         panelBottom.add(btnDisconnect, BorderLayout.WEST);
         panelBottom.add(tfMessage, BorderLayout.CENTER);
         panelBottom.add(btnSend, BorderLayout.EAST);
         panelBottom.setVisible(false);
 
-        add(panelTop, BorderLayout.NORTH);
         add(scrollLog, BorderLayout.CENTER);
         add(scrollUsers, BorderLayout.EAST);
+        add(panelTop, BorderLayout.NORTH);
         add(panelBottom, BorderLayout.SOUTH);
 
         setVisible(true);
@@ -101,43 +95,27 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
         } else if (src == btnLogin) {
             connect();
         } else if (src == btnDisconnect) {
-            disconnect();
+            socketThread.close();
         } else
             throw new RuntimeException("Unknown source: " + src);
     }
 
     private void connect() {
         try {
-            socket = new Socket(tfIPAddress.getText(), Integer.parseInt(tfPort.getText()));
+            Socket socket = new Socket(tfIPAddress.getText(), Integer.parseInt(tfPort.getText()));
             socketThread = new SocketThread(this, "Client", socket);
-            connectionStatus.setText("Connected to server " + tfIPAddress.getText() + ":" + tfPort.getText());
-            panelSettings.setVisible(false);
-            connectionStatus.setVisible(true);
-            panelBottom.setVisible(true);
         } catch (IOException e) {
             showException(Thread.currentThread(), e);
         }
     }
 
-    private void disconnect() {
-        socketThread.interrupt();
-        try {
-            socket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        connectionStatus.setVisible(false);
-        panelBottom.setVisible(false);
-        panelSettings.setVisible(true);
-    }
-
     private void sendMessage() {
         String msg = tfMessage.getText();
-        String username = tfLogin.getText();
         if ("".equals(msg)) return;
         tfMessage.setText(null);
         tfMessage.grabFocus();
-        socketThread.sendMessage(username + ": " + msg);
+        socketThread.sendMessage(msg);
+
 //        putLog(String.format("%s: %s", username, msg));
 //        wrtMsgToLogFile(msg, username);
     }
@@ -172,6 +150,9 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
                     e.getClass().getCanonicalName() + ": " +
                     e.getMessage() + "\n\t at " + ste[0];
         }
+        //почему-то в первый раз нормально отрабатывает, показывает диалоговое окно с сообщением
+        //и ждет, когда пользователь нажмет "Ок". Все последующие разы окно с сообщением просто
+        //промелькивает на экране. Подскажите, в чем дело? Может что-то в недрах реализации JOptionPane?
         JOptionPane.showMessageDialog(null, msg, "Exception", JOptionPane.ERROR_MESSAGE);
     }
 
@@ -187,7 +168,60 @@ public class ClientGUI extends JFrame implements ActionListener, Thread.Uncaught
      */
 
     @Override
-    public void onReceiveString(String msg) {
+    public void onSocketStart(SocketThread thread, Socket socket) {
+        putLog("Start");
+    }
+
+    @Override
+    public void onSocketStop(SocketThread thread) {
+        putLog("Stop");
+        panelBottom.setVisible(false);
+        panelTop.setVisible(true);
+    }
+
+    @Override
+    public void onSocketReady(SocketThread thread, Socket socket) {
+        String login = tfLogin.getText();
+        String password = new String(tfPassword.getPassword());
+        thread.sendMessage(Library.getAuthRequest(login, password));
+    }
+
+    @Override
+    public void onReceiveString(SocketThread thread, Socket socket, String msg) {
+        //разбираем значение полученной строки
+        if ("".equals(msg)) {
+            putLog("Empty response");
+            return;
+        }
+        String[] arr = msg.split(Library.DELIMITER);
+        if (arr[0].equals(Library.AUTH_DENIED)) {
+            putLog("Authentication error");
+            return;
+        }
+        if (arr[0].equals(Library.MSG_FORMAT_ERROR)) {
+            putLog("Server doesn't understand request string: " + arr[1]);
+            return;
+        }
+        if (arr[0].equals(Library.TYPE_BROADCAST)) {
+            long millis = Long.parseLong(arr[1]);
+            Instant instant = Instant.ofEpochMilli(millis);
+            ZonedDateTime zdt = ZonedDateTime.ofInstant(instant, ZoneOffset.systemDefault());
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+            String currentTime = formatter.format(zdt);
+            putLog(currentTime + "> " + arr[2] + " sends broadcast message: " + arr[3]);
+            return;
+        }
+        if (arr[0].equals(Library.AUTH_ACCEPT)) {
+            putLog("Ready to chat");
+            panelBottom.setVisible(true);
+            panelTop.setVisible(false);
+            return;
+        }
+        //по идее, данной строки быть не должно, получение сообщения тоже должно соответствовать
+        //отдельному разделу протокола (по аналогии с TYPE_BROADCAST) и обрабатываться в блоках if
+        //выше. Если обработка полученной строки дошла до этого места, значит она не соответствует
+        //протоколу обмена и должна быть либо отброшена, либо выведена в сообщение об ошибке
+        //(с исключением или без)
         putLog(msg);
     }
 
