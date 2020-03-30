@@ -42,7 +42,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     /**
      * Server Socket Thread methods
-     */
+     * */
 
     @Override
     public void onServerStart(ServerSocketThread thread) {
@@ -53,6 +53,9 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     @Override
     public void onServerStop(ServerSocketThread thread) {
         putLog("Server stopped");
+        for (SocketThread client : clients) {
+            client.close();
+        }
         SqlClient.disconnect();
     }
 
@@ -62,8 +65,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     }
 
     @Override
-    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) {
-    }
+    public void onServerTimeout(ServerSocketThread thread, ServerSocket server) { }
 
     @Override
     public void onSocketAccepted(ServerSocketThread thread, ServerSocket server, Socket socket) {
@@ -79,27 +81,32 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
 
     /**
      * Socket Thread methods
-     */
+     * */
 
     @Override
-    public void onSocketStart(SocketThread thread, Socket socket) {
+    public synchronized void onSocketStart(SocketThread thread, Socket socket) {
         putLog("Client connected");
     }
 
     @Override
-    public void onSocketStop(SocketThread thread) {
-        putLog("Client disconnected");
+    public synchronized void onSocketStop(SocketThread thread) {
+        ClientThread client = (ClientThread) thread;
         clients.remove(thread);
+        if (client.isAuthorized() && !client.isReconnected()) {
+            sendToAllAuthorizedClients(Library.getTypeBroadcast("Server",
+                    client.getNickname() + " disconnected"));
+        }
+        sendToAllAuthorizedClients(Library.getUserList(getUsers()));
     }
 
     @Override
-    public void onSocketReady(SocketThread thread, Socket socket) {
+    public synchronized void onSocketReady(SocketThread thread, Socket socket) {
         putLog("Client is ready to chat");
         clients.add(thread);
     }
 
     @Override
-    public void onReceiveString(SocketThread thread, Socket socket, String msg) {
+    public synchronized void onReceiveString(SocketThread thread, Socket socket, String msg) {
         ClientThread client = (ClientThread) thread;
         if (client.isAuthorized()) {
             handleAutorizedMessage(client, msg);
@@ -109,7 +116,7 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
     }
 
     @Override
-    public void onSocketException(SocketThread thread, Exception exception) {
+    public synchronized void onSocketException(SocketThread thread, Exception exception) {
         exception.printStackTrace();
     }
 
@@ -124,24 +131,89 @@ public class ChatServer implements ServerSocketThreadListener, SocketThreadListe
         String password = arr[2];
         String nickname = SqlClient.getNickname(login, password);
         if (nickname == null) {
-            putLog("Invalid credentials for user " + login);
+            putLog("Invalid credentials for user" + login);
             client.authFail();
             return;
+        } else {
+            ClientThread oldClient = findClientByNickname(nickname);
+            client.authAccept(nickname);
+            if (oldClient == null) {
+                sendToAllAuthorizedClients(Library.getTypeBroadcast("Server", nickname + " connected"));
+            } else {
+                oldClient.reconnect();
+                clients.remove(oldClient);
+            }
         }
-        client.authAccept(nickname);
-        sendToAllAuthorizedClients(Library.getTypeBroadcast("Server", nickname + " connected"));
-
+        sendToAllAuthorizedClients(Library.getUserList(getUsers()));
     }
 
     private void handleAutorizedMessage(ClientThread client, String msg) {
-        sendToAllAuthorizedClients(msg);
+        String[] arr = msg.split(Library.DELIMITER);
+        String msgType = arr[0];
+        switch (msgType) {
+            case Library.TYPE_BCAST_CLIENT:
+                sendToAllAuthorizedClients(
+                        Library.getTypeBroadcast(client.getNickname(), arr[1]));
+                break;
+            case Library.TYPE_MCAST_CLIENT:
+                sendToCustomClients(Library.getTypeBroadcast(client.getNickname(), arr[1]), arr);
+                break;
+            default:
+                client.sendMessage(Library.getMsgFormatError(msg));
+        }
     }
 
-    private void sendToAllAuthorizedClients(String msg) {
+    private synchronized void sendToAllAuthorizedClients(String msg) {
+        for (SocketThread clnt: clients) {
+            if (((ClientThread)clnt).isAuthorized()) {
+                clnt.sendMessage(msg);
+            }
+        }
+//        for (int i = 0; i < clients.size(); i++) {
+//            ClientThread client = (ClientThread) clients.get(i);
+//            if (!client.isAuthorized()) continue;
+//            client.sendMessage(msg);
+//        }
+    }
+
+    private synchronized void sendToCustomClients(String msg, String[] nicknames) {
+        if(nicknames.length < 3) throw new RuntimeException("Multicast error!");
+        for (int i = 2; i < nicknames.length; i++) {
+            sendToSingleClient(msg, nicknames[i]);
+        }
+    }
+
+    private synchronized void sendToSingleClient(String msg, String nickname) {
+        for (SocketThread clnt: clients) {
+            if (((ClientThread)clnt).getNickname().equals(nickname)) {
+                clnt.sendMessage(msg);
+            }
+        }
+//        for (int i = 0; i < clients.size(); i++) {
+//            ClientThread client = (ClientThread) clients.get(i);
+//            if (client.getNickname().equals(nickname)) continue;
+//            client.sendMessage(msg);
+    }
+
+
+    private synchronized String getUsers() {
+        StringBuilder sb = new StringBuilder();
         for (SocketThread socketThread : clients) {
             ClientThread client = (ClientThread) socketThread;
             if (!client.isAuthorized()) continue;
-            client.sendMessage(msg);
+            sb.append(client.getNickname()).append(Library.DELIMITER);
         }
+        return sb.toString();
     }
+
+    private synchronized ClientThread findClientByNickname(String nickname) {
+        for (SocketThread socketThread : clients) {
+            ClientThread client = (ClientThread) socketThread;
+            if (!client.isAuthorized()) continue;
+            if (client.getNickname().equals(nickname))
+                return client;
+        }
+        return null;
+    }
+
 }
